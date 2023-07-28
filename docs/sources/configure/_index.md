@@ -4141,6 +4141,10 @@ dynamodb:
 # CLI flag: -s3.buckets
 [bucketnames: <string> | default = ""]
 
+# Sets a constant prefix for all keys inserted in S3. Example: loki/
+# CLI flag: -s3.key-prefix
+[key_prefix: <string> | default = ""]
+
 # S3 Endpoint to connect to.
 # CLI flag: -s3.endpoint
 [endpoint: <string> | default = ""]
@@ -4418,6 +4422,10 @@ The `s3_storage_config` block configures the connection to Amazon S3 object stor
 # Overrides any buckets specified in s3.url flag
 # CLI flag: -<prefix>.storage.s3.buckets
 [bucketnames: <string> | default = ""]
+
+# Sets a constant prefix for all keys inserted in S3. Example: loki/
+# CLI flag: -<prefix>.storage.s3.key-prefix
+[key_prefix: <string> | default = ""]
 
 # S3 Endpoint to connect to.
 # CLI flag: -<prefix>.storage.s3.endpoint

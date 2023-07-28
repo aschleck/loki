@@ -29,6 +29,58 @@ func (f RoundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req)
 }
 
+func TestRequestPrefix(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, r.URL.Path)
+	}))
+	defer ts.Close()
+
+	cfg := S3Config{
+		Endpoint:         ts.URL,
+		BucketNames:      "buck-o",
+		KeyPrefix:        "some/prefix/",
+		S3ForcePathStyle: true,
+		Insecure:         true,
+		AccessKeyID:      "key",
+		SecretAccessKey:  flagext.SecretWithValue("secret"),
+	}
+
+	tests := []struct {
+		name     string
+		key      string
+		expected string
+	}{
+		{
+			name:     "Single",
+			key:      "key",
+			expected: "/buck-o/some/prefix/key",
+		},
+		{
+			name:     "Multi",
+			key:      "some/random/key",
+			expected: "/buck-o/some/prefix/some/random/key",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, err := NewS3ObjectClient(cfg, hedging.Config{})
+			require.NoError(t, err)
+
+			readCloser, _, err := client.GetObject(context.Background(), tt.key)
+			require.NoError(t, err)
+
+			buffer := make([]byte, 100)
+			_, err = readCloser.Read(buffer)
+			if err != io.EOF {
+				require.NoError(t, err)
+			}
+
+			assert.Equal(t, tt.expected, strings.Trim(string(buffer), "\n\x00"))
+		})
+	}
+}
+
 func TestRequestMiddleware(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, r.Header.Get("echo-me"))

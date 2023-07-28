@@ -69,6 +69,7 @@ type S3Config struct {
 	S3ForcePathStyle bool
 
 	BucketNames      string
+	KeyPrefix        string              `yaml:"key_prefix" doc:"description=Sets a constant prefix for all keys inserted in S3. Example: loki/"`
 	Endpoint         string              `yaml:"endpoint"`
 	Region           string              `yaml:"region"`
 	AccessKeyID      string              `yaml:"access_key_id"`
@@ -105,6 +106,7 @@ func (cfg *S3Config) RegisterFlagsWithPrefix(prefix string, f *flag.FlagSet) {
 		"If only region is specified as a host, proper endpoint will be deduced. Use inmemory:///<bucket-name> to use a mock in-memory implementation.")
 	f.BoolVar(&cfg.S3ForcePathStyle, prefix+"s3.force-path-style", false, "Set this to `true` to force the request to use path-style addressing.")
 	f.StringVar(&cfg.BucketNames, prefix+"s3.buckets", "", "Comma separated list of bucket names to evenly distribute chunks over. Overrides any buckets specified in s3.url flag")
+	f.StringVar(&cfg.KeyPrefix, prefix+"s3.key-prefix", "", "The prefix to all keys inserted in s3. Example: loki-instances/west/")
 
 	f.StringVar(&cfg.Endpoint, prefix+"s3.endpoint", "", "S3 Endpoint to connect to.")
 	f.StringVar(&cfg.Region, prefix+"s3.region", "", "AWS region to use.")
@@ -345,7 +347,7 @@ func (a *S3ObjectClient) DeleteObject(ctx context.Context, objectKey string) err
 	return instrument.CollectedRequest(ctx, "S3.DeleteObject", s3RequestDuration, instrument.ErrorCode, func(ctx context.Context) error {
 		deleteObjectInput := &s3.DeleteObjectInput{
 			Bucket: aws.String(a.bucketFromKey(objectKey)),
-			Key:    aws.String(objectKey),
+			Key:    aws.String(a.cfg.KeyPrefix + objectKey),
 		}
 
 		_, err := a.S3.DeleteObjectWithContext(ctx, deleteObjectInput)
@@ -385,7 +387,7 @@ func (a *S3ObjectClient) GetObject(ctx context.Context, objectKey string) (io.Re
 			var requestErr error
 			resp, requestErr = a.hedgedS3.GetObjectWithContext(ctx, &s3.GetObjectInput{
 				Bucket: aws.String(bucket),
-				Key:    aws.String(objectKey),
+				Key:    aws.String(a.cfg.KeyPrefix + objectKey),
 			})
 			return requestErr
 		})
@@ -409,7 +411,7 @@ func (a *S3ObjectClient) PutObject(ctx context.Context, objectKey string, object
 		putObjectInput := &s3.PutObjectInput{
 			Body:         object,
 			Bucket:       aws.String(a.bucketFromKey(objectKey)),
-			Key:          aws.String(objectKey),
+			Key:          aws.String(a.cfg.KeyPrefix + objectKey),
 			StorageClass: aws.String(a.cfg.StorageClass),
 		}
 
@@ -433,7 +435,7 @@ func (a *S3ObjectClient) List(ctx context.Context, prefix, delimiter string) ([]
 		err := loki_instrument.TimeRequest(ctx, "S3.List", s3RequestDuration, instrument.ErrorCode, func(ctx context.Context) error {
 			input := s3.ListObjectsV2Input{
 				Bucket:    aws.String(a.bucketNames[i]),
-				Prefix:    aws.String(prefix),
+				Prefix:    aws.String(a.cfg.KeyPrefix + prefix),
 				Delimiter: aws.String(delimiter),
 			}
 
